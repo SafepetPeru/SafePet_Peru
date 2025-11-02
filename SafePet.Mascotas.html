@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PetCare - Sistema de Mascotas</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f6f7;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: #fff;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 450px;
+    }
+    h2, h3 { text-align: center; color: #2c3e50; }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #2e86de;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover { background-color: #1b4f72; }
+    .logout-btn { background-color: #e74c3c; }
+    .link-btn {
+      background: none;
+      color: #2e86de;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .mascota-card {
+      background-color: #ecf0f1;
+      padding: 10px;
+      border-radius: 10px;
+      margin-top: 10px;
+    }
+    .qr-container { text-align: center; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <!-- LOGIN -->
+  <div class="container" id="loginPage">
+    <h2>Inicio de Sesión</h2>
+    <select id="tipoCuenta">
+      <option value="usuario">Usuario</option>
+      <option value="admin">Administrador</option>
+    </select>
+    <input type="text" id="username" placeholder="Usuario" />
+    <input type="password" id="password" placeholder="Contraseña" />
+    <button onclick="login()">Ingresar</button>
+    <button class="link-btn" onclick="mostrarRegistro()">¿No tienes cuenta? Crear una</button>
+    <button class="link-btn" onclick="mostrarRecuperar()">¿Olvidaste tu contraseña?</button>
+  </div>
+
+  <!-- REGISTRO -->
+  <div class="container" id="registroPage" style="display:none;">
+    <h2>Crear Cuenta</h2>
+    <input type="text" id="nuevoUsuario" placeholder="Nombre de usuario" />
+    <input type="password" id="nuevaContraseña" placeholder="Contraseña" />
+    <select id="planUsuario">
+      <option value="normal">Versión Normal</option>
+      <option value="premium">Versión Premium</option>
+    </select>
+    <button onclick="registrarUsuario()">Registrar</button>
+    <button class="link-btn" onclick="volverLogin()">Volver</button>
+  </div>
+
+  <!-- RECUPERAR -->
+  <div class="container" id="recuperarPage" style="display:none;">
+    <h2>Recuperar Cuenta</h2>
+    <input type="text" id="recuperarUsuario" placeholder="Nombre de usuario" />
+    <button onclick="recuperarCuenta()">Recuperar</button>
+    <button class="link-btn" onclick="volverLogin()">Volver</button>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="container" id="adminPage" style="display:none;">
+    <h2>Panel de Administrador</h2>
+    <h3>Usuarios registrados</h3>
+    <div id="listaUsuarios"></div>
+    <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+  </div>
+
+  <!-- USUARIO -->
+  <div class="container" id="userPage" style="display:none;">
+    <h2>Panel de Usuario</h2>
+    <div id="personaSection">
+      <h3>Datos del Propietario</h3>
+      <input type="text" id="nombrePersona" placeholder="Nombre completo" />
+      <input type="text" id="direccionPersona" placeholder="Dirección" />
+    </div>
+
+    <div id="mascotasSection">
+      <h3>Datos de Mascotas</h3>
+      <div id="mascotasContainer"></div>
+      <button onclick="agregarMascota()">Agregar Mascota</button>
+    </div>
+
+    <div class="qr-container">
+      <button onclick="generarQR()">Generar QR Público</button>
+      <canvas id="qrcode"></canvas>
+    </div>
+
+    <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+  </div>
+
+  <!-- PÚBLICO (QR) -->
+  <div class="container" id="publicPage" style="display:none;">
+    <h2>Datos Públicos de Mascota</h2>
+    <div id="publicMascotas"></div>
+  </div>
+
+  <script>
+    // Datos iniciales
+    let usuarios = JSON.parse(localStorage.getItem("usuarios")) || [];
+    let usuarioActual = null;
+
+    // === LOGIN ===
+    function login() {
+      const tipo = document.getElementById("tipoCuenta").value;
+      const user = document.getElementById("username").value.trim();
+      const pass = document.getElementById("password").value.trim();
+
+      if (tipo === "admin") {
+        if (user === "admin" && pass === "1234") {
+          usuarioActual = { tipo: "admin" };
+          mostrarAdmin();
+        } else {
+          alert("Credenciales de admin incorrectas (usa admin / 1234)");
+        }
+        return;
+      }
+
+      const encontrado = usuarios.find(u => u.nombre === user && u.pass === pass);
+      if (encontrado) {
+        usuarioActual = encontrado;
+        mostrarUsuario();
+      } else {
+        alert("Usuario o contraseña incorrectos.");
+      }
+    }
+
+    // === REGISTRO ===
+    function registrarUsuario() {
+      const nombre = document.getElementById("nuevoUsuario").value.trim();
+      const pass = document.getElementById("nuevaContraseña").value.trim();
+      const plan = document.getElementById("planUsuario").value;
+
+      if (!nombre || !pass) return alert("Completa todos los campos");
+      if (usuarios.some(u => u.nombre === nombre)) return alert("Ese usuario ya existe");
+
+      usuarios.push({ nombre, pass, plan, mascotas: [] });
+      localStorage.setItem("usuarios", JSON.stringify(usuarios));
+      alert("Usuario creado correctamente.");
+      volverLogin();
+    }
+
+    // === RECUPERAR ===
+    function recuperarCuenta() {
+      const nombre = document.getElementById("recuperarUsuario").value.trim();
+      const user = usuarios.find(u => u.nombre === nombre);
+      if (user) alert(`Contraseña: ${user.pass}`);
+      else alert("Usuario no encontrado");
+    }
+
+    // === ADMIN ===
+    function mostrarAdmin() {
+      mostrarSeccion("adminPage");
+      const lista = document.getElementById("listaUsuarios");
+      lista.innerHTML = "";
+      usuarios.forEach(u => {
+        lista.innerHTML += `<p><b>${u.nombre}</b> - ${u.plan}</p>`;
+      });
+    }
+
+    // === USUARIO ===
+    function mostrarUsuario() {
+      mostrarSeccion("userPage");
+    }
+
+    function agregarMascota() {
+      const cont = document.getElementById("mascotasContainer");
+      const div = document.createElement("div");
+      div.className = "mascota-card";
+      div.innerHTML = `
+        <input type="text" placeholder="Nombre de la mascota">
+        <input type="text" placeholder="Especie">
+        <input type="text" placeholder="Raza">
+        <input type="number" placeholder="Edad (años)">
+      `;
+      cont.appendChild(div);
+    }
+
+    // === QR ===
+    function generarQR() {
+      const plan = usuarioActual.plan || "normal";
+      let baseURL = window.location.origin + window.location.pathname;
+      if (baseURL.startsWith("file")) {
+        baseURL = "https://petcare-demo.vercel.app/index.html"; // Cambia esto cuando subas tu web
+      }
+      const url = `${baseURL}?view=public&plan=${plan}`;
+      const canvas = document.getElementById("qrcode");
+      QRCode.toCanvas(canvas, url, { width: 200 }, err => {
+        if (err) console.error(err);
+        else alert("QR generado. Escanéalo para ver los datos públicos.");
+      });
+    }
+
+    // === VISTA PÚBLICA ===
+    function cargarVistaPublica(plan) {
+      mostrarSeccion("publicPage");
+      const div = document.getElementById("publicMascotas");
+      let info = `
+        <div class="mascota-card">
+          <p><b>Nombre:</b> Firulais</p>
+          <p><b>Especie:</b> Perro</p>
+          <p><b>Raza:</b> Labrador</p>
+          <p><b>Edad:</b> 3 años</p>
+          <p><b>Dirección:</b> Av. Los Pinos 123</p>
+      `;
+      if (plan === "premium") {
+        info += `<p><b>Vacunas:</b> Completa</p><p><b>Ubicación:</b> Lima, Perú</p>`;
+      }
+      info += `</div>`;
+      div.innerHTML = info;
+    }
+
+    // === AUX ===
+    function mostrarRegistro() { mostrarSeccion("registroPage"); }
+    function mostrarRecuperar() { mostrarSeccion("recuperarPage"); }
+    function volverLogin() { mostrarSeccion("loginPage"); }
+    function logout() { usuarioActual = null; mostrarSeccion("loginPage"); }
+
+    function mostrarSeccion(id) {
+      ["loginPage","registroPage","recuperarPage","adminPage","userPage","publicPage"]
+        .forEach(p => document.getElementById(p).style.display = "none");
+      document.getElementById(id).style.display = "block";
+    }
+
+    // === CARGA INICIAL ===
+    window.onload = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("view") === "public") {
+        const plan = params.get("plan") || "normal";
+        cargarVistaPublica(plan);
+      } else {
+        mostrarSeccion("loginPage");
+      }
+    };
+  </script>
+</body>
+</html>
